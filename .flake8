@@ -1,0 +1,4 @@
+[flake8]
+exclude=.venv,__init__.py
+max_line_length=112
+ignore=W291,W503
