@@ -1,5 +1,5 @@
 from functools import lru_cache
-from typing import AsyncGenerator
+from typing import Any, AsyncGenerator
 
 import httpx
 import jwt
@@ -25,7 +25,7 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
-def get_current_user(request: Request) -> dict:
+def get_current_user(request: Request) -> dict[str, Any]:
     unauthorized_exc = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
     raw_jwt = request.cookies.get("jwt-access")
 
@@ -63,5 +63,5 @@ async def get_current_user_wallet(
 
 
 @lru_cache
-def get_redis() -> aioredis.Redis:
+def get_redis() -> aioredis.Redis:  # type: ignore
     return broker_config.redis_client

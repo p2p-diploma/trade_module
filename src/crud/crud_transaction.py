@@ -1,3 +1,5 @@
+from typing import Any
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from crud.base import CRUDBase
@@ -7,7 +9,7 @@ from schemas.transaction import TransactionCreate, TransactionUpdate
 
 
 class CRUDTransaction(CRUDBase[Transaction, TransactionCreate, TransactionUpdate]):
-    async def create_transaction(self, db: AsyncSession, *, transaction_data: dict) -> Transaction:
+    async def create_transaction(self, db: AsyncSession, *, transaction_data: dict[str, Any]) -> Transaction:
         transaction_data["crypto_type"] = (
             CryptoType.ETH if transaction_data["crypto_type"] == "eth" else CryptoType.ERC20
         )

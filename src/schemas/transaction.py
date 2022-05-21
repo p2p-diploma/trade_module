@@ -1,7 +1,7 @@
 import datetime
 import enum
 from decimal import Decimal
-from typing import Literal, Optional
+from typing import Optional
 
 from pydantic import BaseModel, validator
 from pydantic.schema import UUID
@@ -41,10 +41,10 @@ class TransactionUpdate(BaseModel):
 
 class TransactionInDBBase(TransactionBase):
     id: Optional[UUID] = None
-    status: str
+    status: str  # type: ignore
 
     @validator("status", pre=True)
-    def transaction_status_to_str(cls, v) -> str:
+    def transaction_status_to_str(cls, v: int) -> str:
         return TransactionStatus(v).name
 
     class Config:
