@@ -1,41 +1,24 @@
 # flake8: noqa
+from __future__ import with_statement
 
-import dotenv
-
-from core.config import app_settings
-
-dotenv.load_dotenv(".env")
 import asyncio
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config, pool
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-# this is the Alembic Config object, which provides
-# access to the values within the .ini file in use.
 from alembic import context
+from core.config import app_settings
+from db.base import Base  # noqa
+from db.models import __all__  # noqa
 
 config = context.config
 
-# Interpret the config file for Python logging.
-# This line sets up loggers basically.
 fileConfig(config.config_file_name)
 config.set_main_option("sqlalchemy.url", app_settings.SQLALCHEMY_DATABASE_URI_ASYNC)
-
-from db.base import Base  # noqa
-
-# add your model's MetaData object here
-# for 'autogenerate' support
-# from myapp import mymodel
-# target_metadata = mymodel.Base.metadata
-from db.models import __all__  # noqa
-
 target_metadata = Base.metadata
 
-# other values from the config, defined by the needs of env.py,
-# can be acquired:
-# my_important_option = config.get_main_option("my_important_option")
-# ... etc.
+print(config.get_main_option("sqlalchemy.url"))
 
 
 def run_migrations_offline():

@@ -1,1 +1,1 @@
-from app.db.base_class import Base  # noqa
+from db.base_class import Base  # noqa
