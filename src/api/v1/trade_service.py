@@ -13,8 +13,9 @@ import crud
 from core.celery_app import set_transaction_expire_timer
 from core.config import app_settings
 from core.dependencies import get_async_client
-from db.models.transaction import Transaction, TransactionStatus
+from db.models.transaction import CryptoType, Transaction, TransactionStatus
 from exceptions import (
+    NotFound,
     TransactionInitiatorException,
     TransactionPaymentTimeExpired,
     TransactionStatusPermitted,
@@ -59,7 +60,7 @@ class TradeService:
                 app_settings.CRYPTO_SERVICE_API,
                 f"/wallets/p2p/{balance_increase_url}",
             ),
-            params={"wallet_id": blockchain_id, "amount": amount, "currencyType": crypto_type},
+            params={"wallet_id": blockchain_id, "amount": amount, "currencyType": crypto_type},  # type: ignore
         )
         response.raise_for_status()
 
@@ -73,7 +74,7 @@ class TradeService:
                 app_settings.CRYPTO_SERVICE_API,
                 f"/wallets/p2p/{balance_increase_url}",
             ),
-            params={"wallet_id": blockchain_id, "amount": amount, "currencyType": crypto_type},
+            params={"wallet_id": blockchain_id, "amount": amount, "currencyType": crypto_type},  # type: ignore
         )
 
         response.raise_for_status()
@@ -92,7 +93,8 @@ class TradeService:
 
         transaction_obj = TransactionUpdate(status=TransactionStatus.ON_PAYMENT_WAIT)
         set_transaction_expire_timer.apply_async(
-            args=(str(transaction.id),), eta=(datetime.datetime.now() + datetime.timedelta(minutes=app_settings.TRANSACTION_EXPIRE_TIME))
+            args=(str(transaction.id),),
+            eta=(datetime.datetime.now() + datetime.timedelta(minutes=app_settings.TRANSACTION_EXPIRE_TIME)),
         )
         return await crud.transactions.update(db=db, db_obj=transaction, obj_in=transaction_obj)
 
@@ -154,14 +156,18 @@ class TradeService:
         return transaction.seller_wallet
 
     async def _transfer_on_success(
-        self, wallet_id: str, transaction: Transaction, crypto_type: str
+        self, wallet_id: str, transaction: Transaction, crypto_type: CryptoType
     ) -> tuple[str, datetime.datetime]:
         response = await self._async_client.get(
             urljoin(
                 app_settings.CRYPTO_SERVICE_API,
                 f"/transfer/{crypto_type}/from_p2p",
             ),
-            params={"walletId": wallet_id, "recipient": transaction.buyer_wallet, "amount": transaction.amount},
+            params={
+                "walletId": wallet_id,
+                "recipient": transaction.buyer_wallet,
+                "amount": transaction.amount,  # type: ignore
+            },
         )
         response.raise_for_status()
 
@@ -173,6 +179,9 @@ class TradeService:
         self, db: AsyncSession, trade_id: UUID, current_user_wallet: tuple[str, str]
     ) -> Transaction:
         transaction = await crud.transactions.get(db, trade_id)
+
+        if transaction is None:
+            raise NotFound()
 
         if transaction.status == TransactionStatus.EXPIRED:
             raise TransactionPaymentTimeExpired()
@@ -188,7 +197,7 @@ class TradeService:
         closed_on = None
 
         if transaction.status.next == TransactionStatus.SUCCESS:
-            hash, closed_on = self._transfer_on_success(
+            hash, closed_on = await self._transfer_on_success(
                 current_user_wallet[0], transaction, transaction.crypto_type
             )
 
@@ -202,6 +211,9 @@ class TradeService:
         self, db: AsyncSession, trade_id: UUID, current_user_wallet: tuple[str, str]
     ) -> Transaction:
         transaction = await crud.transactions.get(db, trade_id)
+
+        if transaction is None:
+            raise NotFound()
 
         if transaction.status not in [TransactionStatus.ON_PAYMENT_WAIT, TransactionStatus.CREATED]:
             raise TransactionStatusPermitted()

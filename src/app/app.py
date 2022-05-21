@@ -34,8 +34,6 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(APIException)
     async def api_exception_handler(request: Request, exception: APIException) -> Response:
-        if not isinstance(exception, APIException):
-            exception = SomethingWentWrongException()
         return ORJSONResponse(
             content=APIException.Schema(
                 code=exception.default_code,
@@ -45,7 +43,7 @@ def create_app() -> FastAPI:
         )
 
     @app.exception_handler(Exception)
-    async def api_exception_handler(request: Request, exception: Exception) -> Response:
+    async def exception_handler(request: Request, exception: Exception) -> Response:
         if not isinstance(exception, APIException):
             exception = SomethingWentWrongException()
         return ORJSONResponse(

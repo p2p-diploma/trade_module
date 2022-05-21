@@ -1,7 +1,7 @@
 import functools
 import inspect
 
-from exceptions import APIException, SomethingWentWrongException
+from exceptions import SomethingWentWrongException
 
 
 def transactional(func):

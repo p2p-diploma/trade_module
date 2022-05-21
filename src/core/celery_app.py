@@ -13,11 +13,14 @@ celery = Celery(__name__, broker=app_settings.BROKER_HOST, backend=app_settings.
 
 
 async def expire_transaction(
-        trade_id: str,
-):
+    trade_id: str,
+) -> None:
     db = dependencies.async_session()
 
     transaction = await crud.transactions.get(db, trade_id)
+
+    if transaction is None:
+        return
 
     if transaction.status != TransactionStatus.ON_PAYMENT_WAIT:
         return
@@ -30,4 +33,3 @@ async def expire_transaction(
 @celery.task(name="transaction_expire_timer")
 def set_transaction_expire_timer(trade_id: str) -> None:
     asyncio.run(expire_transaction(trade_id))
-
