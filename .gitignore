@@ -6,7 +6,10 @@ __pycache__
 
 
 .env
-.database.env
+*.env
+!.example.env
+!.example.*.env
+
 
 .vscode
 .coverage

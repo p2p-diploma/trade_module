@@ -1,6 +1,6 @@
 from typing import Any, Dict, Optional
 
-from pydantic import BaseSettings, PostgresDsn, validator
+from pydantic import AnyUrl, BaseSettings, PostgresDsn, validator
 
 
 class AsyncPostgresDsn(PostgresDsn):
@@ -13,13 +13,20 @@ class AppSettings(BaseSettings):
 
     API_V1_STR: str = "/api/v1"
     SECRET_KEY: str
-    # 60 minutes * 24 hours * 8 days = 8 days
 
-    POSTGRES_SERVER: str
+    POSTGRES_HOST: str
     POSTGRES_USER: str
     POSTGRES_PASSWORD: str
     POSTGRES_DB: str
     SQLALCHEMY_DATABASE_URI_ASYNC: Optional[AsyncPostgresDsn] = None
+
+    CRYPTO_SERVICE_API: AnyUrl
+    LOT_SERVICE_API: AnyUrl
+    AUTH_SERVICE_API: AnyUrl
+
+    REDIS_HOST: str
+    BROKER_HOST: str
+    TRANSACTION_EXPIRE_TIME: int
 
     @validator("POSTGRES_DB", pre=True)
     def assemble_db_name(cls, v: Optional[str], values: Dict[str, Any]) -> Any:
@@ -36,7 +43,7 @@ class AppSettings(BaseSettings):
             scheme="postgresql+asyncpg",
             user=values.get("POSTGRES_USER"),
             password=values.get("POSTGRES_PASSWORD"),
-            host=values.get("POSTGRES_SERVER"),
+            host=values.get("POSTGRES_HOST"),
             path=f"/{values.get('POSTGRES_DB') or ''}",
         )
 

@@ -7,8 +7,10 @@ from fastapi.responses import ORJSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.middleware.cors import CORSMiddleware
 
-from api.dependencies import get_session
-from exceptions import APIException
+from api.v1.api import api_router
+from core.config import app_settings
+from core.dependencies import get_session
+from exceptions import APIException, SomethingWentWrongException
 
 
 def create_app() -> FastAPI:
@@ -32,12 +34,28 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(APIException)
     async def api_exception_handler(request: Request, exception: APIException) -> Response:
+        if not isinstance(exception, APIException):
+            exception = SomethingWentWrongException()
         return ORJSONResponse(
             content=APIException.Schema(
-                code="",
-                detail=exception.detail,  # type: ignore
+                code=exception.default_code,
+                detail=exception.default_detail,
             ).dict(),
-            status_code=exception.status_code,  # type: ignore
+            status_code=exception.default_status_code,
         )
+
+    @app.exception_handler(Exception)
+    async def api_exception_handler(request: Request, exception: Exception) -> Response:
+        if not isinstance(exception, APIException):
+            exception = SomethingWentWrongException()
+        return ORJSONResponse(
+            content=APIException.Schema(
+                code=exception.default_code,
+                detail=exception.default_detail,
+            ).dict(),
+            status_code=exception.default_status_code,
+        )
+
+    app.include_router(api_router, prefix=app_settings.API_V1_STR)
 
     return app
