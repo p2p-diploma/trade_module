@@ -43,6 +43,8 @@ class Transaction(Base):
     initiator: Mapped[str] = Column(String, index=True)
     seller_wallet: Mapped[str] = Column(String, index=True)
     buyer_wallet: Mapped[str] = Column(String, index=True)
+    seller_email: Mapped[str] = Column(String, index=True, nullable=False)
+    buyer_email: Mapped[str] = Column(String, index=True, nullable=False)
     amount: Mapped[Decimal] = Column(Numeric(precision=14, scale=6), nullable=False)
     status: Mapped[TransactionStatus] = Column(
         Enum(TransactionStatus), default=TransactionStatus.CREATED, nullable=False

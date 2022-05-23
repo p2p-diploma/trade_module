@@ -15,7 +15,7 @@ router = APIRouter()
 async def create_transaction(
     *,
     db: AsyncSession = Depends(dependencies.get_session),
-    current_user_wallet: tuple[str, str] = Depends(dependencies.get_current_user_wallet),
+    current_user_wallet: tuple[str, str, str] = Depends(dependencies.get_current_user_wallet),
     transaction_in: schemas.TransactionCreate,
     trade_service: TradeService = Depends()
 ) -> Any:
@@ -30,7 +30,7 @@ async def create_transaction(
 async def approve_payment(
     trade_id: UUID,
     db: AsyncSession = Depends(dependencies.get_session),
-    current_user_wallet: tuple[str, str] = Depends(dependencies.get_current_user_wallet),
+    current_user_wallet: tuple[str, str, str] = Depends(dependencies.get_current_user_wallet),
     trade_service: TradeService = Depends(),
 ) -> Any:
     transaction = await trade_service.approve_trade_payment(
@@ -43,7 +43,7 @@ async def approve_payment(
 async def cancel_transaction(
     trade_id: UUID,
     db: AsyncSession = Depends(dependencies.get_session),
-    current_user_wallet: tuple[str, str] = Depends(dependencies.get_current_user_wallet),
+    current_user_wallet: tuple[str, str, str] = Depends(dependencies.get_current_user_wallet),
     trade_service: TradeService = Depends(),
 ) -> Any:
     transaction = await trade_service.cancel_transaction(

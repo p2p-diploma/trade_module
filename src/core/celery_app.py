@@ -6,6 +6,7 @@ from celery import Celery
 import crud
 from core import dependencies
 from core.config import app_settings
+from core.dependencies import send_transaction_status_notification
 from db.models.transaction import TransactionStatus
 from schemas import TransactionUpdate
 
@@ -27,7 +28,9 @@ async def expire_transaction(
 
     transaction_obj = TransactionUpdate(status=TransactionStatus.EXPIRED, closed_on=datetime.datetime.now())
 
-    await crud.transactions.update(db=db, db_obj=transaction, obj_in=transaction_obj)
+    transaction = crud.transactions.update(db=db, db_obj=transaction, obj_in=transaction_obj)
+
+    await send_transaction_status_notification(transaction)
 
 
 @celery.task(name="transaction_expire_timer")

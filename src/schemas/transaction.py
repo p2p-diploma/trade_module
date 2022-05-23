@@ -3,7 +3,7 @@ import enum
 from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, EmailStr, validator
 from pydantic.schema import UUID
 
 from db.models.transaction import CryptoType, TransactionStatus
@@ -27,6 +27,7 @@ class TransactionBase(BaseModel):
 
 class TransactionCreate(BaseModel):
     seller_wallet: str
+    seller_email: EmailStr
     amount: Decimal
     crypto_type: str
     sell_type: SellType
