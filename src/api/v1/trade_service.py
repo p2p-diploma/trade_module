@@ -12,9 +12,10 @@ from starlette.requests import Request
 import crud
 from core.celery_app import set_transaction_expire_timer
 from core.config import app_settings
-from core.dependencies import get_async_client
+from core.dependencies import get_async_client, send_transaction_status_notification
 from db.models.transaction import CryptoType, Transaction, TransactionStatus
 from exceptions import (
+    APIException,
     NotFound,
     TransactionInitiatorException,
     TransactionPaymentTimeExpired,
@@ -50,6 +51,19 @@ class TradeService:
 
         return response_data < amount
 
+    async def _get_seller_id(self, seller_email) -> str:
+        response = await self._async_client.get(
+            urljoin(
+                app_settings.CRYPTO_SERVICE_API,
+                f"/wallets/eth/email/{seller_email}/p2p",
+            ),
+        )
+        response.raise_for_status()
+
+        response_data = response.json()
+
+        return response_data[0]
+
     async def _increase_seller_wallet_balance(
         self, amount: Decimal, blockchain_id: str, crypto_type: str, sell_type: str
     ) -> None:
@@ -80,7 +94,7 @@ class TradeService:
         response.raise_for_status()
 
     async def create_transaction(
-        self, db: AsyncSession, *, obj_in: TransactionCreate, active_user_wallet: tuple[str, str]
+        self, db: AsyncSession, *, obj_in: TransactionCreate, active_user_wallet: tuple[str, str, str]
     ) -> Transaction:
         if obj_in.sell_type == SellType.SELL:
             transaction = await self._create_sell_transaction(
@@ -96,10 +110,15 @@ class TradeService:
             args=(str(transaction.id),),
             eta=(datetime.datetime.now() + datetime.timedelta(minutes=app_settings.TRANSACTION_EXPIRE_TIME)),
         )
-        return await crud.transactions.update(db=db, db_obj=transaction, obj_in=transaction_obj)
+
+        transaction = await crud.transactions.update(db=db, db_obj=transaction, obj_in=transaction_obj)
+
+        await send_transaction_status_notification(transaction)
+
+        return transaction
 
     async def _create_sell_transaction(
-        self, db: AsyncSession, *, obj_in: TransactionCreate, buyer_wallet: tuple[str, str]
+        self, db: AsyncSession, *, obj_in: TransactionCreate, buyer_wallet: tuple[str, str, str]
     ) -> Transaction:
         """
         Creates a Transaction for a sell from a sell lot.
@@ -111,41 +130,48 @@ class TradeService:
         obj_in_data = jsonable_encoder(obj_in)
 
         obj_in_data["buyer_wallet"] = buyer_wallet[1]
+        obj_in_data["buyer_email"] = buyer_wallet[2]
+
         obj_in_data["initiator"] = buyer_wallet[1]
 
-        # if not self._is_balance_enough(obj_in.amount, seller_wallet[0], obj_in.crypto_type, 'sell'):
-        #     raise APIException(detail="Not enough balance for trade")
+        seller_wallet_id = await self._get_seller_id(obj_in.seller_email)
+
+        if not self._is_balance_enough(obj_in.amount, seller_wallet_id, obj_in.crypto_type, "sell"):
+            raise APIException(detail="Not enough balance for trade")
 
         transaction = await crud.transactions.create_transaction(db=db, transaction_data=obj_in_data)
-        # TODO transaction atomic
-        # await self._reduce_seller_wallet_balance(
-        #     amount=obj_in.amount,
-        #     blockchain_id=buyer_wallet[0],
-        #     crypto_type=obj_in.crypto_type,
-        #     sell_type="sell",
-        # )
+        await self._reduce_seller_wallet_balance(
+            amount=obj_in.amount,
+            blockchain_id=buyer_wallet[0],
+            crypto_type=obj_in.crypto_type,
+            sell_type="sell",
+        )
 
         return transaction
 
     async def _create_buy_transaction(
-        self, db: AsyncSession, *, obj_in: TransactionCreate, seller_wallet: tuple[str, str]
+        self, db: AsyncSession, *, obj_in: TransactionCreate, seller_wallet: tuple[str, str, str]
     ) -> Transaction:
         obj_in_data = jsonable_encoder(obj_in)
         obj_in_data["buyer_wallet"] = obj_in_data["seller_wallet"]
+        obj_in_data["buyer_email"] = obj_in_data["seller_email"]
+
         obj_in_data["seller_wallet"] = seller_wallet[1]
+        obj_in_data["seller_email"] = seller_wallet[2]
+
         obj_in_data["initiator"] = obj_in_data["seller_wallet"]
 
-        # if not self._is_balance_enough(obj_in.amount, buyer_wallet[0], obj_in.crypto_type, 'buy'):
-        #     raise APIException(detail="Not enough balance for trade")
+        if not self._is_balance_enough(obj_in.amount, seller_wallet[0], obj_in.crypto_type, "buy"):
+            raise APIException(detail="Not enough balance for trade")
 
         transaction = await crud.transactions.create_transaction(db=db, transaction_data=obj_in_data)
 
-        # await self._reduce_seller_wallet_balance(
-        #     amount=obj_in.amount,
-        #     blockchain_id=seller_wallet[0],
-        #     crypto_type=obj_in.crypto_type,
-        #     sell_type="buy",
-        # )
+        await self._reduce_seller_wallet_balance(
+            amount=obj_in.amount,
+            blockchain_id=seller_wallet[0],
+            crypto_type=obj_in.crypto_type,
+            sell_type="buy",
+        )
 
         return transaction
 
@@ -176,7 +202,7 @@ class TradeService:
         return response_data["hash"], datetime.datetime.strptime(response_data["time"], "")
 
     async def approve_trade_payment(
-        self, db: AsyncSession, trade_id: UUID, current_user_wallet: tuple[str, str]
+        self, db: AsyncSession, trade_id: UUID, current_user_wallet: tuple[str, str, str]
     ) -> Transaction:
         transaction = await crud.transactions.get(db, trade_id)
 
@@ -205,10 +231,14 @@ class TradeService:
             status=transaction.status.next, initiator=new_initiator, hash=hash, closed_on=closed_on
         )
 
-        return await crud.transactions.update(db=db, db_obj=transaction, obj_in=transaction_obj)
+        transaction = await crud.transactions.update(db=db, db_obj=transaction, obj_in=transaction_obj)
+
+        await send_transaction_status_notification(transaction)
+
+        return transaction
 
     async def cancel_transaction(
-        self, db: AsyncSession, trade_id: UUID, current_user_wallet: tuple[str, str]
+        self, db: AsyncSession, trade_id: UUID, current_user_wallet: tuple[str, str, str]
     ) -> Transaction:
         transaction = await crud.transactions.get(db, trade_id)
 

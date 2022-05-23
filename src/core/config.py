@@ -1,6 +1,6 @@
 from typing import Any, Dict, Optional
 
-from pydantic import AnyUrl, BaseSettings, PostgresDsn, validator
+from pydantic import BaseSettings, PostgresDsn, validator
 
 
 class AsyncPostgresDsn(PostgresDsn):
@@ -20,9 +20,9 @@ class AppSettings(BaseSettings):
     POSTGRES_DB: str
     SQLALCHEMY_DATABASE_URI_ASYNC: Optional[AsyncPostgresDsn] = None
 
-    CRYPTO_SERVICE_API: AnyUrl
-    LOT_SERVICE_API: AnyUrl
-    AUTH_SERVICE_API: AnyUrl
+    CRYPTO_SERVICE_API: str
+    LOT_SERVICE_API: str
+    AUTH_SERVICE_API: str
 
     REDIS_HOST: str
     BROKER_HOST: str
