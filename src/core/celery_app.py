@@ -28,7 +28,7 @@ async def expire_transaction(
 
     transaction_obj = TransactionUpdate(status=TransactionStatus.EXPIRED, closed_on=datetime.datetime.now())
 
-    transaction = crud.transactions.update(db=db, db_obj=transaction, obj_in=transaction_obj)
+    transaction = await crud.transactions.update(db=db, db_obj=transaction, obj_in=transaction_obj)
 
     await send_transaction_status_notification(transaction)
 

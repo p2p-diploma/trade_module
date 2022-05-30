@@ -7,7 +7,7 @@ import jwt
 from fastapi import Depends, HTTPException
 from fastapi.encoders import jsonable_encoder
 from httpx import AsyncClient
-from orjson import orjson
+import orjson
 from redis import asyncio as aioredis
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import status
@@ -64,6 +64,9 @@ async def get_current_user_wallet(
 
     return response_data["id"], response_data["address"], user_data["email"]
 
+    # return "someid", "someaddress", "some@mail.ru"
+    # return "someid", "0x123q", "alemk@mail.ru"
+
 
 @lru_cache
 def get_redis() -> aioredis.Redis:  # type: ignore
@@ -73,7 +76,7 @@ def get_redis() -> aioredis.Redis:  # type: ignore
 redis_key: str = "transaction_status_changed"
 
 
-async def send_transaction_status_notification(transaction: Transaction):
+async def send_transaction_status_notification(transaction: Transaction) -> None:
     transaction_json = jsonable_encoder(transaction, exclude_none=True)
     message = orjson.dumps(transaction_json)
     await get_redis().xadd(redis_key, {"data": message}, "*")
