@@ -15,6 +15,7 @@ from core.config import app_settings
 from core.dependencies import get_async_client, send_transaction_status_notification
 from db.models.transaction import CryptoType, Transaction, TransactionStatus
 from exceptions import (
+    AccessDenied,
     APIException,
     NotFound,
     TransactionInitiatorException,
@@ -51,7 +52,7 @@ class TradeService:
 
         return response_data < amount
 
-    async def _get_seller_id(self, seller_email) -> str:
+    async def _get_seller_id(self, seller_email: str) -> str:
         response = await self._async_client.get(
             urljoin(
                 app_settings.CRYPTO_SERVICE_API,
@@ -96,6 +97,7 @@ class TradeService:
     async def create_transaction(
         self, db: AsyncSession, *, obj_in: TransactionCreate, active_user_wallet: tuple[str, str, str]
     ) -> Transaction:
+
         if obj_in.sell_type == SellType.SELL:
             transaction = await self._create_sell_transaction(
                 db, obj_in=obj_in, buyer_wallet=active_user_wallet
@@ -132,18 +134,18 @@ class TradeService:
         obj_in_data["buyer_wallet"] = buyer_wallet[1]
         obj_in_data["buyer_email"] = buyer_wallet[2]
 
-        obj_in_data["initiator"] = buyer_wallet[1]
+        obj_in_data["initiator"] = buyer_wallet[2]
 
         seller_wallet_id = await self._get_seller_id(obj_in.seller_email)
 
-        if not self._is_balance_enough(obj_in.amount, seller_wallet_id, obj_in.crypto_type, "sell"):
+        if not self._is_balance_enough(obj_in.amount, seller_wallet_id, obj_in.crypto_type.value, "sell"):
             raise APIException(detail="Not enough balance for trade")
 
         transaction = await crud.transactions.create_transaction(db=db, transaction_data=obj_in_data)
         await self._reduce_seller_wallet_balance(
             amount=obj_in.amount,
-            blockchain_id=buyer_wallet[0],
-            crypto_type=obj_in.crypto_type,
+            blockchain_id=seller_wallet_id,
+            crypto_type=obj_in.crypto_type.value,
             sell_type="sell",
         )
 
@@ -159,9 +161,9 @@ class TradeService:
         obj_in_data["seller_wallet"] = seller_wallet[1]
         obj_in_data["seller_email"] = seller_wallet[2]
 
-        obj_in_data["initiator"] = obj_in_data["seller_wallet"]
+        obj_in_data["initiator"] = obj_in_data["buyer_email"]
 
-        if not self._is_balance_enough(obj_in.amount, seller_wallet[0], obj_in.crypto_type, "buy"):
+        if not self._is_balance_enough(obj_in.amount, seller_wallet[0], obj_in.crypto_type.value, "buy"):
             raise APIException(detail="Not enough balance for trade")
 
         transaction = await crud.transactions.create_transaction(db=db, transaction_data=obj_in_data)
@@ -169,7 +171,7 @@ class TradeService:
         await self._reduce_seller_wallet_balance(
             amount=obj_in.amount,
             blockchain_id=seller_wallet[0],
-            crypto_type=obj_in.crypto_type,
+            crypto_type=obj_in.crypto_type.value,
             sell_type="buy",
         )
 
@@ -177,9 +179,9 @@ class TradeService:
 
     def _get_new_initiator(self, transaction: Transaction) -> str:
         if transaction.initiator == transaction.seller_wallet:
-            return transaction.buyer_wallet
+            return transaction.buyer_email
 
-        return transaction.seller_wallet
+        return transaction.seller_email
 
     async def _transfer_on_success(
         self, wallet_id: str, transaction: Transaction, crypto_type: CryptoType
@@ -212,7 +214,7 @@ class TradeService:
         if transaction.status == TransactionStatus.EXPIRED:
             raise TransactionPaymentTimeExpired()
 
-        if transaction.initiator != current_user_wallet[1]:
+        if transaction.initiator != current_user_wallet[2]:
             raise TransactionInitiatorException()
 
         if transaction.status not in [TransactionStatus.ON_PAYMENT_WAIT, TransactionStatus.ON_APPROVE]:
@@ -226,6 +228,8 @@ class TradeService:
             hash, closed_on = await self._transfer_on_success(
                 current_user_wallet[0], transaction, transaction.crypto_type
             )
+            hash = "somehash"
+            closed_on = datetime.datetime.now()
 
         transaction_obj = TransactionUpdate(
             status=transaction.status.next, initiator=new_initiator, hash=hash, closed_on=closed_on
@@ -248,7 +252,7 @@ class TradeService:
         if transaction.status not in [TransactionStatus.ON_PAYMENT_WAIT, TransactionStatus.CREATED]:
             raise TransactionStatusPermitted()
 
-        if transaction.initiator != current_user_wallet[1]:
+        if transaction.buyer_email != current_user_wallet[2]:
             raise TransactionInitiatorException()
 
         hash = None
@@ -256,4 +260,43 @@ class TradeService:
 
         transaction_obj = TransactionUpdate(status=TransactionStatus.CANCELED, hash=hash, closed_on=closed_on)
 
-        return await crud.transactions.update(db=db, db_obj=transaction, obj_in=transaction_obj)
+        transaction = await crud.transactions.update(db=db, db_obj=transaction, obj_in=transaction_obj)
+
+        seller_wallet_id = await self._get_seller_id(transaction.seller_email)
+
+        await self._increase_seller_wallet_balance(
+            amount=transaction.amount,
+            blockchain_id=seller_wallet_id,
+            crypto_type=transaction.crypto_type.value,
+            sell_type=transaction.sell_type.value,
+        )
+
+        return transaction
+
+    async def get_transactions(self, db: AsyncSession, email: str, role: str, offset: int) -> list[Transaction]:
+        match role:
+            case "U":
+                transactions = await crud.transactions.get_multi_by_email(db, email=email, offset=offset)
+            case "A" | "SU":
+                transactions = await crud.transactions.get_multi(db, skip=offset)
+            case _:
+                return []
+
+        return transactions
+
+    async def get_certain_transaction(
+        self, db: AsyncSession, transaction_id: UUID, email: str, role: str
+    ) -> Transaction:
+        transaction = await crud.transactions.get(db, id=transaction_id)
+
+        if transaction is None:
+            raise NotFound()
+
+        if (
+            role == "U"
+            and (transaction.buyer_email != email and transaction.seller_email != email)
+            and role not in ["U", "A", "SU"]
+        ):
+            raise AccessDenied()
+
+        return transaction

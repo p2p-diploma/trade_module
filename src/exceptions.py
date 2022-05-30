@@ -57,6 +57,12 @@ class TransactionPaymentTimeExpired(APIException):
     default_detail = "Payment time expired"
 
 
+class AccessDenied(APIException):
+    default_status_code = status.HTTP_403_FORBIDDEN
+    default_code = "access_denied"
+    default_detail = "You don't have access"
+
+
 class SomethingWentWrongException(APIException):
     default_status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
     default_code = "something_went_wrong"
