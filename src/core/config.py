@@ -23,6 +23,7 @@ class AppSettings(BaseSettings):
     CRYPTO_SERVICE_API: str
     LOT_SERVICE_API: str
     AUTH_SERVICE_API: str
+    WALLET_SERVICE_API: str
 
     REDIS_HOST: str
     BROKER_HOST: str

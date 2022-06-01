@@ -4,10 +4,10 @@ from urllib.parse import urljoin
 
 import httpx
 import jwt
+import orjson
 from fastapi import Depends, HTTPException
 from fastapi.encoders import jsonable_encoder
 from httpx import AsyncClient
-import orjson
 from redis import asyncio as aioredis
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import status
@@ -54,15 +54,15 @@ async def get_current_user_wallet(
     user_data = get_current_user(request)
     response = await client.get(
         urljoin(
-            app_settings.CRYPTO_SERVICE_API,
-            f"/wallets/eth/email/{user_data['email']}/p2p",
+            app_settings.WALLET_SERVICE_API,
+            f"/wallets/eth/email/{user_data['user_id']}/p2p",
         ),
     )
     response.raise_for_status()
 
     response_data = response.json()
 
-    return response_data["id"], response_data["address"], user_data["email"]
+    return response_data["id"], response_data["address"], user_data["user_id"]
 
     # return "someid", "someaddress", "some@mail.ru"
     # return "someid", "0x123q", "alemk@mail.ru"
