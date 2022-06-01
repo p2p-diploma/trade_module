@@ -42,7 +42,7 @@ class TradeService:
 
         response = await self._async_client.get(
             urljoin(
-                app_settings.CRYPTO_SERVICE_API,
+                app_settings.WALLET_SERVICE_API,
                 f"/wallets/{crypto_type}/{blockchain_id}/p2p/{balance_url}",
             ),
         )
@@ -55,7 +55,7 @@ class TradeService:
     async def _get_seller_id(self, seller_email: str) -> str:
         response = await self._async_client.get(
             urljoin(
-                app_settings.CRYPTO_SERVICE_API,
+                app_settings.WALLET_SERVICE_API,
                 f"/wallets/eth/email/{seller_email}/p2p",
             ),
         )
@@ -70,9 +70,9 @@ class TradeService:
     ) -> None:
         balance_increase_url: str = "increaseToSell" if sell_type == "sell" else "increaseToBuy"
 
-        response = await self._async_client.get(
+        response = await self._async_client.put(
             urljoin(
-                app_settings.CRYPTO_SERVICE_API,
+                app_settings.WALLET_SERVICE_API,
                 f"/wallets/p2p/{balance_increase_url}",
             ),
             params={"wallet_id": blockchain_id, "amount": amount, "currencyType": crypto_type},  # type: ignore
@@ -82,12 +82,12 @@ class TradeService:
     async def _reduce_seller_wallet_balance(
         self, amount: Decimal, blockchain_id: str, crypto_type: str, sell_type: str
     ) -> None:
-        balance_increase_url: str = "reduceToSell" if sell_type == "sell" else "reduceToBuy"
+        balance_reduce_url: str = "reduceToSell" if sell_type == "sell" else "reduceToBuy"
 
-        response = await self._async_client.get(
+        response = await self._async_client.put(
             urljoin(
-                app_settings.CRYPTO_SERVICE_API,
-                f"/wallets/p2p/{balance_increase_url}",
+                app_settings.WALLET_SERVICE_API,
+                f"/wallets/p2p/{balance_reduce_url}",
             ),
             params={"wallet_id": blockchain_id, "amount": amount, "currencyType": crypto_type},  # type: ignore
         )
