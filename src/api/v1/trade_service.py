@@ -55,8 +55,8 @@ class TradeService:
         response.raise_for_status()
 
         response_data = Decimal(response.text)
-
-        return response_data < amount
+        
+        return response_data >= amount
 
     async def _get_seller_id(self, seller_email: str) -> str:
         response = await self._async_client.get(
@@ -80,11 +80,10 @@ class TradeService:
         balance_increase_url: str = "increaseToSell" if sell_type == "sell" else "increaseToBuy"
 
         response = await self._async_client.put(
-            urljoin(
-                app_settings.WALLET_SERVICE_API,
-                f"/api/v1/wallets/{crypto_type}/p2p/{balance_increase_url}",
+            urljoin(app_settings.WALLET_SERVICE_API,
+            f"/api/v1/wallets/{crypto_type}/p2p/{balance_increase_url}",
             ),
-            data={"walletId": blockchain_id, "amount": amount},  # type: ignore
+            json={"walletId": blockchain_id, "amount": float(amount) },  # type: ignore
             headers={"Content-Type": "application/json"},
         )
 
@@ -98,9 +97,11 @@ class TradeService:
         self, amount: Decimal, blockchain_id: str, crypto_type: str, sell_type: str
     ) -> None:
         balance_reduce_url: str = "reduceToSell" if sell_type == "sell" else "reduceToBuy"
+        
         response = await self._async_client.put(
-            app_settings.WALLET_SERVICE_API + f"/api/v1/wallets/{crypto_type}/p2p/{balance_reduce_url}",
-            data={"walletId": blockchain_id, "amount": amount},  # type: ignore
+            urljoin(app_settings.WALLET_SERVICE_API, 
+            f"/api/v1/wallets/{crypto_type}/p2p/{balance_reduce_url}"),
+            json={"walletId": blockchain_id, "amount": float(amount) },  # type: ignore
             headers={"Content-Type": "application/json"},
         )
 
@@ -154,7 +155,7 @@ class TradeService:
 
         seller_wallet_id = await self._get_seller_id(obj_in.seller_email)
 
-        if not self._is_balance_enough(obj_in.amount, seller_wallet_id, obj_in.crypto_type.value, "sell"):
+        if not await self._is_balance_enough(obj_in.amount, seller_wallet_id, obj_in.crypto_type.value, "sell"):
             raise APIException(detail="Not enough balance for trade")
 
         transaction = await crud.transactions.create_transaction(db=db, transaction_data=obj_in_data)
@@ -164,7 +165,7 @@ class TradeService:
             crypto_type=obj_in.crypto_type.value,
             sell_type="sell",
         )
-
+        service_logger.info("Created transaction successfully")
         return transaction
 
     async def _create_buy_transaction(
@@ -172,14 +173,14 @@ class TradeService:
     ) -> Transaction:
         obj_in_data = jsonable_encoder(obj_in)
         obj_in_data["buyer_wallet"] = obj_in_data["seller_wallet"]
-        obj_in_data["buyer_email"] = obj_in_data["seller_email"]
+        obj_in_data["buyer_email"] = obj_in_data["email"]
 
         obj_in_data["seller_wallet"] = seller_wallet[1]
-        obj_in_data["seller_email"] = seller_wallet[2]
+        obj_in_data["email"] = seller_wallet[2]
 
         obj_in_data["initiator"] = obj_in_data["buyer_email"]
 
-        if not self._is_balance_enough(obj_in.amount, seller_wallet[0], obj_in.crypto_type.value, "buy"):
+        if not await self._is_balance_enough(obj_in.amount, seller_wallet[0], obj_in.crypto_type.value, "buy"):
             raise APIException(detail="Not enough balance for trade")
 
         transaction = await crud.transactions.create_transaction(db=db, transaction_data=obj_in_data)
@@ -202,22 +203,23 @@ class TradeService:
     async def _transfer_on_success(
         self, wallet_id: str, transaction: Transaction, crypto_type: CryptoType
     ) -> tuple[str, datetime.datetime]:
-        response = await self._async_client.get(
+        recipient_wallet_id = await self._get_seller_id(transaction.buyer_email)
+        response = await self._async_client.post(
             urljoin(
                 app_settings.CRYPTO_SERVICE_API,
-                f"/transfer/{crypto_type}/from_p2p",
+                f"/api/v1/{crypto_type.value}/transfer/from_p2p",
             ),
-            params={
+            json={
                 "walletId": wallet_id,
-                "recipient": transaction.buyer_wallet,
-                "amount": transaction.amount,  # type: ignore
+                "recipientId": recipient_wallet_id,
+                "amount": float(transaction.amount),  # type: ignore
             },
         )
         response.raise_for_status()
 
         response_data = response.json()
-
-        return response_data["hash"], datetime.datetime.strptime(response_data["time"], "")
+        #2022-06-04T20:54:19
+        return response_data["transactionHash"], datetime.datetime.strptime(response_data["transactionDate"].split('.')[0], '%Y-%m-%dT%H:%M:%S')
 
     async def approve_trade_payment(
         self, db: AsyncSession, trade_id: UUID, current_user_wallet: tuple[str, str, str]
@@ -244,8 +246,6 @@ class TradeService:
             hash, closed_on = await self._transfer_on_success(
                 current_user_wallet[0], transaction, transaction.crypto_type
             )
-            hash = "somehash"
-            closed_on = datetime.datetime.now()
 
         transaction_obj = TransactionUpdate(
             status=transaction.status.next, initiator=new_initiator, hash=hash, closed_on=closed_on
@@ -278,7 +278,7 @@ class TradeService:
 
         transaction = await crud.transactions.update(db=db, db_obj=transaction, obj_in=transaction_obj)
 
-        seller_wallet_id = await self._get_seller_id(transaction.seller_email)
+        seller_wallet_id = await self._get_wallet_id(transaction.seller_email)
 
         await self._increase_seller_wallet_balance(
             amount=transaction.amount,
