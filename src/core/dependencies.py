@@ -55,7 +55,7 @@ async def get_current_user_wallet(
     response = await client.get(
         urljoin(
             app_settings.WALLET_SERVICE_API,
-            f"/wallets/eth/email/{user_data['user_id']}/p2p",
+            f"/api/v1/wallets/eth/email/{user_data['user_id']}/p2p",
         ),
     )
     response.raise_for_status()

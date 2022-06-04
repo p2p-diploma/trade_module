@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from crud.base import CRUDBase
 from db.models import Transaction
-from db.models.transaction import CryptoType, FiatType
+from db.models.transaction import CryptoType, FiatType, SellType
 from schemas.transaction import TransactionCreate, TransactionUpdate
 
 
@@ -14,8 +14,8 @@ class CRUDTransaction(CRUDBase[Transaction, TransactionCreate, TransactionUpdate
     async def create_transaction(self, db: AsyncSession, *, transaction_data: dict[str, Any]) -> Transaction:
         transaction_data["fiat_type"] = FiatType(transaction_data["fiat_type"])
         transaction_data["crypto_type"] = CryptoType(transaction_data["crypto_type"])
+        transaction_data["sell_type"] = SellType(transaction_data["sell_type"])
 
-        transaction_data.pop("sell_type")
         transaction_data["fiat_amount"] = Decimal(transaction_data["amount"]).quantize(
             Decimal(".0001"), rounding=ROUND_UP
         ) * Decimal(transaction_data.pop("price")).quantize(Decimal(".0001"), rounding=ROUND_UP).quantize(

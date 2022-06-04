@@ -13,6 +13,7 @@ import crud
 from core.celery_app import set_transaction_expire_timer
 from core.config import app_settings
 from core.dependencies import get_async_client, send_transaction_status_notification
+from core.logger_config import service_logger
 from db.models.transaction import CryptoType, Transaction, TransactionStatus
 from exceptions import (
     AccessDenied,
@@ -43,9 +44,14 @@ class TradeService:
         response = await self._async_client.get(
             urljoin(
                 app_settings.WALLET_SERVICE_API,
-                f"/wallets/{crypto_type}/{blockchain_id}/p2p/{balance_url}",
+                f"/api/v1/wallets/{crypto_type}/{blockchain_id}/p2p/{balance_url}",
             ),
         )
+
+        service_logger.info(
+            f"Is balance enough for {blockchain_id} status code: {response.status_code}; Text: {response.text}"
+        )
+
         response.raise_for_status()
 
         response_data = Decimal(response.text)
@@ -56,14 +62,17 @@ class TradeService:
         response = await self._async_client.get(
             urljoin(
                 app_settings.WALLET_SERVICE_API,
-                f"/wallets/eth/email/{seller_email}/p2p",
+                f"/api/v1/wallets/eth/email/{seller_email}/p2p",
             ),
         )
+
+        service_logger.info(f"Get Seller ID status code: {response.status_code}; Text: {response.text}")
+
         response.raise_for_status()
 
         response_data = response.json()
 
-        return response_data[0]
+        return response_data["id"]
 
     async def _increase_seller_wallet_balance(
         self, amount: Decimal, blockchain_id: str, crypto_type: str, sell_type: str
@@ -73,23 +82,30 @@ class TradeService:
         response = await self._async_client.put(
             urljoin(
                 app_settings.WALLET_SERVICE_API,
-                f"/wallets/p2p/{balance_increase_url}",
+                f"/api/v1/wallets/{crypto_type}/p2p/{balance_increase_url}",
             ),
-            params={"wallet_id": blockchain_id, "amount": amount, "currencyType": crypto_type},  # type: ignore
+            data={"walletId": blockchain_id, "amount": amount},  # type: ignore
+            headers={"Content-Type": "application/json"},
         )
+
+        service_logger.info(
+            f"Increase seller wallet balance status code: {response.status_code}; Text: {response.text}"
+        )
+
         response.raise_for_status()
 
     async def _reduce_seller_wallet_balance(
         self, amount: Decimal, blockchain_id: str, crypto_type: str, sell_type: str
     ) -> None:
         balance_reduce_url: str = "reduceToSell" if sell_type == "sell" else "reduceToBuy"
-
         response = await self._async_client.put(
-            urljoin(
-                app_settings.WALLET_SERVICE_API,
-                f"/wallets/p2p/{balance_reduce_url}",
-            ),
-            params={"wallet_id": blockchain_id, "amount": amount, "currencyType": crypto_type},  # type: ignore
+            app_settings.WALLET_SERVICE_API + f"/api/v1/wallets/{crypto_type}/p2p/{balance_reduce_url}",
+            data={"walletId": blockchain_id, "amount": amount},  # type: ignore
+            headers={"Content-Type": "application/json"},
+        )
+
+        service_logger.info(
+            f"Reduce seller wallet balance status code: {response.status_code}; Text: {response.text}"
         )
 
         response.raise_for_status()
