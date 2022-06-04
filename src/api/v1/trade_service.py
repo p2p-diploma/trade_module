@@ -173,10 +173,10 @@ class TradeService:
     ) -> Transaction:
         obj_in_data = jsonable_encoder(obj_in)
         obj_in_data["buyer_wallet"] = obj_in_data["seller_wallet"]
-        obj_in_data["buyer_email"] = obj_in_data["email"]
+        obj_in_data["buyer_email"] = obj_in_data["seller_email"]
 
         obj_in_data["seller_wallet"] = seller_wallet[1]
-        obj_in_data["email"] = seller_wallet[2]
+        obj_in_data["seller_email"] = seller_wallet[2]
 
         obj_in_data["initiator"] = obj_in_data["buyer_email"]
 
