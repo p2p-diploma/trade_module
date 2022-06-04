@@ -4,11 +4,11 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-
+from core.logger_config import service_logger
 import schemas
 from api.v1.trade_service import TradeService
 from core import dependencies
-from exceptions import NotFound
+from exceptions import (NotFound, APIException)
 
 router = APIRouter()
 
@@ -24,7 +24,6 @@ async def create_transaction(
     transaction = await trade_service.create_transaction(
         db=db, obj_in=transaction_in, active_user_wallet=current_user_wallet
     )
-
     return transaction
 
 
