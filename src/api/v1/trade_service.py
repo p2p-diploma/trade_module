@@ -316,7 +316,7 @@ class TradeService:
         if (
             role == "U"
             and (transaction.buyer_email != email and transaction.seller_email != email)
-            and role not in ["U", "A", "SU"]
+            and role not in ["A", "SU"]
         ):
             raise AccessDenied()
 
