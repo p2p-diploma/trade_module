@@ -4,11 +4,11 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.logger_config import service_logger
+
 import schemas
 from api.v1.trade_service import TradeService
 from core import dependencies
-from exceptions import (NotFound, APIException)
+from exceptions import NotFound
 
 router = APIRouter()
 
@@ -62,10 +62,8 @@ async def get_certain_transaction(
             email=current_user_wallet["user_id"],
             role=current_user_wallet["role"],
         )
-    except NotFound:
+    except NotFound | KeyError:
         return {}
-    except KeyError:
-        raise NotFound()
 
     return transaction
 

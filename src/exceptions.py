@@ -63,6 +63,12 @@ class AccessDenied(APIException):
     default_detail = "You don't have access"
 
 
+class TradeForYourselfException(APIException):
+    default_status_code = status.HTTP_400_BAD_REQUEST
+    default_code = "trade_error"
+    default_detail = "You cannot trade to yourself"
+
+
 class SomethingWentWrongException(APIException):
     default_status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
     default_code = "something_went_wrong"
