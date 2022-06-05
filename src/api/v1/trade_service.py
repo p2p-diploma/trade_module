@@ -19,6 +19,7 @@ from exceptions import (
     AccessDenied,
     APIException,
     NotFound,
+    TradeForYourselfException,
     TransactionInitiatorException,
     TransactionPaymentTimeExpired,
     TransactionStatusPermitted,
@@ -55,7 +56,7 @@ class TradeService:
         response.raise_for_status()
 
         response_data = Decimal(response.text)
-        
+
         return response_data >= amount
 
     async def _get_seller_id(self, seller_email: str) -> str:
@@ -80,10 +81,11 @@ class TradeService:
         balance_increase_url: str = "increaseToSell" if sell_type == "sell" else "increaseToBuy"
 
         response = await self._async_client.put(
-            urljoin(app_settings.WALLET_SERVICE_API,
-            f"/api/v1/wallets/{crypto_type}/p2p/{balance_increase_url}",
+            urljoin(
+                app_settings.WALLET_SERVICE_API,
+                f"/api/v1/wallets/{crypto_type}/p2p/{balance_increase_url}",
             ),
-            json={"walletId": blockchain_id, "amount": float(amount) },  # type: ignore
+            json={"walletId": blockchain_id, "amount": float(amount)},  # type: ignore
             headers={"Content-Type": "application/json"},
         )
 
@@ -97,11 +99,10 @@ class TradeService:
         self, amount: Decimal, blockchain_id: str, crypto_type: str, sell_type: str
     ) -> None:
         balance_reduce_url: str = "reduceToSell" if sell_type == "sell" else "reduceToBuy"
-        
+
         response = await self._async_client.put(
-            urljoin(app_settings.WALLET_SERVICE_API, 
-            f"/api/v1/wallets/{crypto_type}/p2p/{balance_reduce_url}"),
-            json={"walletId": blockchain_id, "amount": float(amount) },  # type: ignore
+            urljoin(app_settings.WALLET_SERVICE_API, f"/api/v1/wallets/{crypto_type}/p2p/{balance_reduce_url}"),
+            json={"walletId": blockchain_id, "amount": float(amount)},  # type: ignore
             headers={"Content-Type": "application/json"},
         )
 
@@ -114,6 +115,8 @@ class TradeService:
     async def create_transaction(
         self, db: AsyncSession, *, obj_in: TransactionCreate, active_user_wallet: tuple[str, str, str]
     ) -> Transaction:
+        if obj_in.seller_email == active_user_wallet[2] or obj_in.seller_wallet == active_user_wallet[1]:
+            raise TradeForYourselfException()
 
         if obj_in.sell_type == SellType.SELL:
             transaction = await self._create_sell_transaction(
@@ -218,8 +221,10 @@ class TradeService:
         response.raise_for_status()
 
         response_data = response.json()
-        #2022-06-04T20:54:19
-        return response_data["transactionHash"], datetime.datetime.strptime(response_data["transactionDate"].split('.')[0], '%Y-%m-%dT%H:%M:%S')
+        # 2022-06-04T20:54:19
+        return response_data["transactionHash"], datetime.datetime.strptime(
+            response_data["transactionDate"].split(".")[0], "%Y-%m-%dT%H:%M:%S"
+        )
 
     async def approve_trade_payment(
         self, db: AsyncSession, trade_id: UUID, current_user_wallet: tuple[str, str, str]
@@ -278,7 +283,7 @@ class TradeService:
 
         transaction = await crud.transactions.update(db=db, db_obj=transaction, obj_in=transaction_obj)
 
-        seller_wallet_id = await self._get_wallet_id(transaction.seller_email)
+        seller_wallet_id = await self._get_seller_id(transaction.seller_email)
 
         await self._increase_seller_wallet_balance(
             amount=transaction.amount,
