@@ -65,7 +65,7 @@ class Transaction(Base):
     status: Mapped[TransactionStatus] = Column(
         Enum(TransactionStatus), default=TransactionStatus.CREATED, nullable=False
     )
-    created_at: Mapped[datetime.datetime] = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    created_at: Mapped[datetime.datetime] = Column(DateTime(timezone=True), default=func.now(), nullable=False)
     updated_at: Mapped[datetime.datetime] = Column(DateTime(timezone=True), onupdate=func.now())
     closed_on: Mapped[datetime.datetime] = Column(DateTime(timezone=True), nullable=True)
     hash: Mapped[str] = Column(String, nullable=True, index=True, unique=True)
