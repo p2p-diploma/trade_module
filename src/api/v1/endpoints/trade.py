@@ -62,7 +62,7 @@ async def get_certain_transaction(
             email=current_user_wallet["user_id"],
             role=current_user_wallet["role"],
         )
-    except NotFound | KeyError:
+    except (NotFound, KeyError):
         return {}
 
     return transaction
