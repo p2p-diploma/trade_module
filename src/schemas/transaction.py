@@ -34,6 +34,7 @@ class TransactionCreate(BaseModel):
     crypto_type: CryptoType
     fiat_type: FiatType
     sell_type: SellType
+    lot_id: int
 
 
 class TransactionUpdate(BaseModel):

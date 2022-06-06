@@ -4,7 +4,7 @@ import uuid
 from decimal import Decimal
 from typing import Union
 
-from sqlalchemy import Column, DateTime, Enum, Numeric, String, func
+from sqlalchemy import Column, DateTime, Enum, Integer, Numeric, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped
 
@@ -61,6 +61,7 @@ class Transaction(Base):
     fiat_amount: Mapped[Decimal] = Column(Numeric(precision=14, scale=6), nullable=False)
     fiat_type: Mapped[FiatType] = Column(Enum(FiatType), nullable=False)
     sell_type: Mapped[SellType] = Column(Enum(SellType), nullable=False)
+    lot_id: Mapped[int] = Column(Integer, nullable=False)
 
     status: Mapped[TransactionStatus] = Column(
         Enum(TransactionStatus), default=TransactionStatus.CREATED, nullable=False
